@@ -18,10 +18,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/wrouesnel/go.log"
+	"github.com/julienschmidt/httprouter"
+)
+
+var version = "dev"
+
+var (
+	pdnsVersion         = 3
+	prefix              = ""
+	reversedNames       = false
+	noTrailingDot       = false
+	noTrailingDotOnRoot = false
 )
 
 type pdnsRequest struct {
@@ -32,16 +44,6 @@ type pdnsRequest struct {
 func (req *pdnsRequest) String() string {
 	return fmt.Sprintf("%s: %+v", req.Method, req.Parameters)
 }
-
-var version = "?"
-
-var (
-	pdnsVersion         = 3
-	prefix              = ""
-	reversedNames       = false
-	noTrailingDot       = false
-	noTrailingDotOnRoot = false
-)
 
 func parseBoolean(s string) (bool, error) {
 	s = strings.ToLower(s)
@@ -106,85 +108,121 @@ func setPdnsVersionParameter(param *int) setParameterFunc {
 }
 
 func main() {
-	log.SetPrefix(fmt.Sprintf("pdns-etcd3[%d]: ", os.Getpid()))
-	log.SetFlags(0)
-	dec := json.NewDecoder(os.Stdin)
-	enc := json.NewEncoder(os.Stdout)
-	var request pdnsRequest
-	if err := dec.Decode(&request); err != nil {
-		log.Fatalln("Failed to decode JSON:", err)
-	}
-	if request.Method != "initialize" {
-		log.Fatalln("Waited for 'initialize', got:", request.Method)
-	}
-	logMessages := []string{fmt.Sprintf("v:%s", version)}
-	// pdns-version
-	if _, err := readParameter("pdns-version", request.Parameters, setPdnsVersionParameter(&pdnsVersion)); err != nil {
-		fatal(enc, err)
-	}
-	logMessages = append(logMessages, fmt.Sprintf("pdns-version: %d", pdnsVersion))
-	// prefix
-	if _, err := readParameter("prefix", request.Parameters, setStringParameterFunc(&prefix)); err != nil {
-		fatal(enc, err)
-	}
-	logMessages = append(logMessages, fmt.Sprintf("prefix: %q", prefix))
-	// reversed-names
-	if _, err := readParameter("reversed-names", request.Parameters, setBooleanParameterFunc(&reversedNames)); err != nil {
-		fatal(enc, err)
-	}
-	logMessages = append(logMessages, fmt.Sprintf("reversed-names: %v", reversedNames))
-	// no-trailing-dot
-	if _, err := readParameter("no-trailing-dot", request.Parameters, setBooleanParameterFunc(&noTrailingDot)); err != nil {
-		fatal(enc, err)
-	}
-	logMessages = append(logMessages, fmt.Sprintf("no-trailing-dot: %v", noTrailingDot))
-	// no-trailing-dot-on-root
-	if noTrailingDot {
-		if _, err := readParameter("no-trailing-dot-on-root", request.Parameters, setBooleanParameterFunc(&noTrailingDotOnRoot)); err != nil {
-			fatal(enc, err)
-		}
-		logMessages = append(logMessages, fmt.Sprintf("no-trailing-dot-on-root: %v", noTrailingDotOnRoot))
-	}
-	// client
-	if logMsgs, err := setupClient(request.Parameters); err != nil {
-		fatal(enc, err.Error())
-	} else {
-		logMessages = append(logMessages, logMsgs...)
-	}
-	defer closeClient()
-	respond(enc, true, logMessages...)
-	log.Println("initialized.", strings.Join(logMessages, ". "))
-	// main loop
-	for {
-		request := pdnsRequest{}
-		if err := dec.Decode(&request); err != nil {
-			if err == io.EOF {
-				log.Println("EOF on input stream, terminating")
-				break
-			}
-			log.Fatalln("Failed to decode request:", err)
-		}
-		log.Println("request:", request)
-		since := time.Now()
-		var result interface{}
-		var err error
-		switch strings.ToLower(request.Method) {
-		case "lookup":
-			result, err = lookup(request.Parameters)
-		default:
-			result, err = false, fmt.Errorf("unknown/unimplemented request: %s", request)
-		}
-		if err == nil {
-			log.Println("result:", result)
-			respond(enc, result)
-		} else {
-			log.Println("error:", err)
-			respond(enc, result, err.Error())
-		}
-		dur := time.Since(since)
-		log.Println("request dur:", dur)
-	}
+	log.Infoln("Starting up.")
+
+	log.Infoln("Initializing router")
+	router := httprouter.New()
+	router.GET("/initialize")
+	router.GET("/lookup")
+	router.GET("/list")
+	router.GET("/getBeforeAndAfterNamesAbsolute")
+	router.GET("/getAllDomainMetadata")
+	router.GET("/getDomainMetadata")
+	router.GET("/setDomainMetadata")
+	router.GET("/getDomainKeys")
+	router.GET("/addDomainKey")
+	router.GET("/removeDomainKey")
+	router.GET("/activateDomainKey")
+	router.GET("/deactivateDomainKey")
+	router.GET("/getTSIGKey")
+	router.GET("/getDomainInfo")
+	router.GET("/setNotified")
+	router.GET("/isMaster")
+	router.GET("/superMasterBackend")
+	router.GET("/createSlaveDomain")
+	router.GET("/replaceRRSet")
+	router.GET("/feedRecord")
+	router.GET("/feedEnts")
+	router.GET("/feedEnts3")
+	router.GET("/startTransaction")
+	router.GET("/commitTransaction")
+	router.GET("/abortTransaction")
+	router.GET("/calculateSOASerial")
+	router.GET("/directBackendCmd")
+	router.GET("/getAllDomains")
+	router.GET("/searchRecords")
 }
+
+//func main() {
+//	log.SetPrefix(fmt.Sprintf("pdns-etcd3[%d]: ", os.Getpid()))
+//	log.SetFlags(0)
+//	dec := json.NewDecoder(os.Stdin)
+//	enc := json.NewEncoder(os.Stdout)
+//	var request pdnsRequest
+//	if err := dec.Decode(&request); err != nil {
+//		log.Fatalln("Failed to decode JSON:", err)
+//	}
+//	if request.Method != "initialize" {
+//		log.Fatalln("Waited for 'initialize', got:", request.Method)
+//	}
+//	logMessages := []string{fmt.Sprintf("v:%s", version)}
+//	// pdns-version
+//	if _, err := readParameter("pdns-version", request.Parameters, setPdnsVersionParameter(&pdnsVersion)); err != nil {
+//		fatal(enc, err)
+//	}
+//	logMessages = append(logMessages, fmt.Sprintf("pdns-version: %d", pdnsVersion))
+//	// prefix
+//	if _, err := readParameter("prefix", request.Parameters, setStringParameterFunc(&prefix)); err != nil {
+//		fatal(enc, err)
+//	}
+//	logMessages = append(logMessages, fmt.Sprintf("prefix: %q", prefix))
+//	// reversed-names
+//	if _, err := readParameter("reversed-names", request.Parameters, setBooleanParameterFunc(&reversedNames)); err != nil {
+//		fatal(enc, err)
+//	}
+//	logMessages = append(logMessages, fmt.Sprintf("reversed-names: %v", reversedNames))
+//	// no-trailing-dot
+//	if _, err := readParameter("no-trailing-dot", request.Parameters, setBooleanParameterFunc(&noTrailingDot)); err != nil {
+//		fatal(enc, err)
+//	}
+//	logMessages = append(logMessages, fmt.Sprintf("no-trailing-dot: %v", noTrailingDot))
+//	// no-trailing-dot-on-root
+//	if noTrailingDot {
+//		if _, err := readParameter("no-trailing-dot-on-root", request.Parameters, setBooleanParameterFunc(&noTrailingDotOnRoot)); err != nil {
+//			fatal(enc, err)
+//		}
+//		logMessages = append(logMessages, fmt.Sprintf("no-trailing-dot-on-root: %v", noTrailingDotOnRoot))
+//	}
+//	// Setup etcd client connection
+//	if logMsgs, err := setupClient(request.Parameters); err != nil {
+//		fatal(enc, err.Error())
+//	} else {
+//		logMessages = append(logMessages, logMsgs...)
+//	}
+//	defer closeClient()
+//	respond(enc, true, logMessages...)
+//	log.Println("initialized.", strings.Join(logMessages, ". "))
+//	// main loop
+//	for {
+//		request := pdnsRequest{}
+//		if err := dec.Decode(&request); err != nil {
+//			if err == io.EOF {
+//				log.Println("EOF on input stream, terminating")
+//				break
+//			}
+//			log.Fatalln("Failed to decode request:", err)
+//		}
+//		log.Println("request:", request)
+//		since := time.Now()
+//		var result interface{}
+//		var err error
+//		switch strings.ToLower(request.Method) {
+//		case "lookup":
+//			result, err = lookup(request.Parameters)
+//		default:
+//			result, err = false, fmt.Errorf("unknown/unimplemented request: %s", request)
+//		}
+//		if err == nil {
+//			log.Println("result:", result)
+//			respond(enc, result)
+//		} else {
+//			log.Println("error:", err)
+//			respond(enc, result, err.Error())
+//		}
+//		dur := time.Since(since)
+//		log.Println("request dur:", dur)
+//	}
+//}
 
 func makeResponse(result interface{}, msg ...string) map[string]interface{} {
 	response := map[string]interface{}{"result": result}

@@ -94,3 +94,8 @@ For now, there is much logging, as the program is in alpha state.
 
 To get started hacking on this project, clone the repository and run
 `./autogen.sh` to setup pre-commit hooks (these will help your commits pass CI).
+
+## Testing
+
+Running tests requires docker, and possibly correct proxy server settings, to
+build the PowerDNS and etcd test environments.

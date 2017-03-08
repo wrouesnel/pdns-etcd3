@@ -1,0 +1,23 @@
+version: '2'
+
+networks:
+  cluster:
+    driver: bridge
+
+services:
+  # Backing etcd store
+  etcd1:
+    image: quay.io/coreos/etcd
+    
+
+  # PowerDNS instance
+  powerdns:
+    build:
+      context: '.'
+      args: 
+        http_proxy: $http_proxy
+        https_proxy: $https_proxy
+    volume:
+    - ../../pdns-etcd3:/pdns-etcd3:ro
+    networks:
+      cluster:

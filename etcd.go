@@ -32,7 +32,7 @@ var (
 )
 
 func setConfigFileParameter(value string) error {
-	client, err := clientv3.NewFromConfigFile(value)
+	client, err := clientv3.N(value)
 	if err != nil {
 		return fmt.Errorf("failed to create client instance: %s", err)
 	}

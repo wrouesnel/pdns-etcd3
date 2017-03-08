@@ -9,7 +9,7 @@ OUT := pdns-etcd3
 all: style lint $(OUT)
 
 $(OUT): $(SOURCES)
-	CGO_ENABLED=0 go build -a -v -o $(OUT) -ldflags="-extldflags '-static' -X main.version=${VERSION}"
+	CGO_ENABLED=0 go build -a -o $(OUT) -ldflags="-extldflags '-static' -X main.version=${VERSION}"
 
 # Run metalinter
 lint:
