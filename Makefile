@@ -1,21 +1,29 @@
-SOURCES := $(wildcard *.go)
-OUT := pdns-etcd3
-VERSION := $(shell git describe --always --long --dirty)
 
-.PHONY: all
-all: fmt $(OUT) vet
+GO_SRC := $(shell find -type f -name '*.go' ! -path '*/vendor/*')
+
+CONTAINER_NAME ?= wrouesnel/pdns-etcd3:latest
+VERSION ?= $(shell git describe --dirty)
+
+OUT := pdns-etcd3
+
+all: style lint $(OUT)
 
 $(OUT): $(SOURCES)
-	go build -i -v -o $(OUT) -ldflags="-X main.version=${VERSION}"
+	CGO_ENABLED=0 go build -a -v -o $(OUT) -ldflags="-extldflags '-static' -X main.version=${VERSION}"
 
-.PHONY: fmt
+# Run metalinter
+lint:
+	gometalinter.v1
+
+# Check if the code is style conformant
+style:
+	! gofmt -s -l $(GO_SRC) 2>&1 | read 2>/dev/null
+
+# Reformat only our source files to be style conformant
 fmt:
-	gofmt -l -s -w .
+	gofmt -s -w $(GO_SRC)
 
-.PHONY: vet
-vet:
-	go vet
-
-.PHONY: clean
 clean:
-	$(RM) $(OUT)
+	rm -f $(OUT)
+	
+.PHONY: style lint clean

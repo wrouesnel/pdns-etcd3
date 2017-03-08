@@ -89,3 +89,8 @@ PowerDNS 4.x are not handled yet.
 ## Debugging
 
 For now, there is much logging, as the program is in alpha state.
+
+# Hacking
+
+To get started hacking on this project, clone the repository and run
+`./autogen.sh` to setup pre-commit hooks (these will help your commits pass CI).

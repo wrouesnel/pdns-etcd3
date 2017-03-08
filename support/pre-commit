@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Run linters first (since they're more important for local development)
+make lint
+
+# Run style checker last (since CI will run it first)
+make style
